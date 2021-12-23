@@ -1,144 +1,169 @@
 (function (d, w) {
 'use strict';
 
-var estimateRegEx = /^estimate: ([\d\.]+)$/im;
+var matchPointsRegEx = /\(([\d]+)±?(([\d\.]*))pts?\)/im;
 
 var debounce = function (func, wait, immediate) {
-  var timeout;
-  return function() {
-    var context = this, args = arguments;
-    var later = function() {
-      timeout = null;
-      if (!immediate) func.apply(context, args);
-    };
-    var callNow = immediate && !timeout;
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-    if (callNow) func.apply(context, args);
-  };
+	var timeout;
+	return function() {
+		var context = this, args = arguments;
+		var later = function() {
+			timeout = null;
+			if (!immediate) func.apply(context, args);
+		};
+		var callNow = immediate && !timeout;
+		clearTimeout(timeout);
+		timeout = setTimeout(later, wait);
+		if (callNow) func.apply(context, args);
+	};
 };
 
 var pluralize = (value) => (
-  value === 1 ? '' : 's'
+	value === 1 ? '' : 's'
 );
 
 var resetStoryPointsForColumn = (column) => {
-  const customElements = Array.from(column.getElementsByClassName('github-project-story-points'));
-  for (let e of customElements) {
-    const parent = e.parentNode;
-    if (parent.dataset.gpspOriginalContent) {
-      parent.innerText = parent.dataset.gpspOriginalContent;
-      delete parent.dataset.gpspOriginalContent;
-    } else {
-      parent.removeChild(e);
-    }
-  }
+	const customElements = Array.from(column.getElementsByClassName('column-story-points'));
+	for (let e of customElements) {
+		const parent = e.parentNode;
+		if (parent.dataset.gpspOriginalContent) {
+			parent.innerText = parent.dataset.gpspOriginalContent;
+			delete parent.dataset.gpspOriginalContent;
+		} else {
+			parent.removeChild(e);
+		}
+	}
 };
 
-var titleWithTotalPoints = (title, points, unestimated) => {
-    let unestimated_element = "";
-    let points_element = "";
+var titleWithTotalPoints = (cards, points, pointsCone, unestimated, notes) => {
+		let unestimated_element = "";
+		let points_element      = "";
+		let notes_element       = "";
+		let issues_element      = "";
+		let issues              = cards - notes;
+		let show_notes          = false;
+		let show_issues         = false;
 
-    if (unestimated > 0) {
-      unestimated_element = `${unestimated} missing estimate`;
-    }
+		if ( issues && show_issues ) {
+			issues_element = `${issues} issue${pluralize(issues)}`;
+			if ( notes && show_notes ) {
+				issues_element += ', ';
+			}
+		}
 
-    if (points > 0) {
-      points_element = `${points} points`;
-    }
+		if (notes && show_notes) {
+			notes_element = `${notes} note${pluralize(notes)}`;
+		}
 
-    if (points_element && unestimated_element) {
-      unestimated_element = `, ${unestimated_element}`;
-    }
+		if (unestimated > 0) {
+			unestimated_element = ` <span class="column-story-points" style="font-size:xx-small">(${issues-unestimated}/${issues} estd.)</span>`;
+		}
 
-    return `${title} card${pluralize(title)} <span class="github-project-story-points" style="font-size:xx-small">(${points_element}${unestimated_element})</span>`;
+		if (issues && points >= 0) {
+			points_element = pointsCone > 0 ? `${points}±${pointsCone} pt${pluralize(points)}` : `${points} pt${pluralize(points)}`;
+		}
+
+		if (points_element && (show_issues || show_notes)) {
+			points_element = `, ${points_element}`;
+		}
+
+		return issues_element + notes_element + points_element + unestimated_element;
 };
 
 var addStoryPointsForColumn = (column) => {
-  const columnCards = Array
-    .from(column.getElementsByClassName('issue-card'))
-    .filter(card => !card.classList.contains('sortable-ghost'))
-    .map(card => {
-      const labels = Array
-        .from(card.getElementsByClassName('labels'))
+	const columnCards = Array
+		.from(column.getElementsByClassName('issue-card'))
+		.filter(card => !card.classList.contains('sortable-ghost'))
+		.map(card => {
 
-      const estimateLabels = Array
-        .from(card.getElementsByClassName('issue-card-label'))
-        .filter(label => label.innerText.includes('estimate'))
+			const is_note = Array
+				.from(card.getElementsByClassName('card-note-octicon')).length;
 
-      const firstEstimateText = (
-        estimateLabels.length > 0 ? estimateLabels[0].innerText.trim() : null)
+			// Points.
+			const issueTitle = Array
+				.from(card.getElementsByClassName('js-project-card-issue-link'));
 
-      const match = (
-        estimateRegEx.exec(firstEstimateText) ||
-        [null, '0'])
+			const issueTitleInner = (
+				issueTitle.length > 0 ? issueTitle[0].innerText.trim() : null)
 
-      const storyPoints = parseFloat(match[1]) || 0;
-      const estimated = (match[0] !== null);
+			const matchPoints = (
+				matchPointsRegEx.exec(issueTitleInner) ||
+				[null, '0', '0'])
 
-      return {
-        element: card,
-        estimated,
-        storyPoints
-      };
-    });
-  const columnCountElement = column.getElementsByClassName('js-column-card-count')[0];
+			const storyPoints     = parseFloat(matchPoints[1]) || 0;
+			const storyPointsCone = parseFloat(matchPoints[2]) || 0;
 
-  let columnStoryPoints = 0;
-  let columnUnestimated = 0;
+			const is_estimated = (matchPoints[0] !== null);
 
-  for (let card of columnCards) {
-    columnStoryPoints += card.storyPoints;
-    columnUnestimated += (card.estimated ? 0 : 1);
-  }
-  // Apply DOM changes:
-  if (columnStoryPoints || columnUnestimated) {
-    columnCountElement.innerHTML = titleWithTotalPoints(columnCards.length, columnStoryPoints, columnUnestimated);
-  }
+			return {
+				element: card,
+				is_estimated,
+				is_note,
+				storyPoints,
+				storyPointsCone
+			};
+		});
+
+	let columnStoryPoints     = 0;
+	let columnStoryPointsCone = 0;
+	let columnUnestimated     = 0;
+	let columnNotes           = 0;
+
+	for (let card of columnCards) {
+		columnStoryPoints     += card.storyPoints;
+		columnStoryPointsCone += card.storyPointsCone;
+		columnNotes           += card.is_note ? 1 : 0;
+		columnUnestimated     += (card.is_estimated || card.is_note ? 0 : 1);
+	}
+
+	// Apply DOM changes:
+	const columnCountElement = column.getElementsByClassName('js-column-card-count')[0];
+
+	columnCountElement.innerHTML = titleWithTotalPoints(columnCards.length, columnStoryPoints, columnStoryPointsCone, columnUnestimated, columnNotes);
 };
 
 var resets = [];
 
 var start = debounce(() => {
-  // Reset
-  for (let reset of resets) {
-    reset();
-  }
-  resets = [];
-  // Projects
-  const projects = d.getElementsByClassName('project-columns-container');
-  if (projects.length > 0) {
-    const project = projects[0];
-    const columns = Array.from(project.getElementsByClassName('js-project-column')); // Was 'col-project-custom', but that's gitenterprise; github.com is 'project-column', fortunately, both have 'js-project-column'
-    for (let column of columns) {
-      const addStoryPoints = ((c) => debounce(() => {
-        resetStoryPointsForColumn(c);
-        addStoryPointsForColumn(c);
-      }, 50))(column);
-      column.addEventListener('DOMSubtreeModified', addStoryPoints);
-      column.addEventListener('drop', addStoryPoints);
-      addStoryPointsForColumn(column);
-      resets.push(((c) => () => {
-        resetStoryPointsForColumn(c);
-        column.removeEventListener('DOMSubtreeModified', addStoryPoints);
-        column.removeEventListener('drop', addStoryPoints);
-      })(column));
-    }
-  }
-}, 50);
+	// Reset
+	for (let reset of resets) {
+		reset();
+	}
+	resets = [];
+	// Projects
+	const projects = d.getElementsByClassName('project-columns-container');
+	if (projects.length > 0) {
+		const project = projects[0];
+		const columns = Array.from(project.getElementsByClassName('js-project-column')); // Was 'col-project-custom', but that's gitenterprise; github.com is 'project-column', fortunately, both have 'js-project-column'
+		for (let column of columns) {
+			const addStoryPoints = ((c) => debounce(() => {
+				resetStoryPointsForColumn(c);
+				addStoryPointsForColumn(c);
+			}, 50))(column);
+			column.addEventListener('DOMSubtreeModified', addStoryPoints);
+			column.addEventListener('drop', addStoryPoints);
+			addStoryPointsForColumn(column);
+			resets.push(((c) => () => {
+				resetStoryPointsForColumn(c);
+				column.removeEventListener('DOMSubtreeModified', addStoryPoints);
+				column.removeEventListener('drop', addStoryPoints);
+			})(column));
+		}
+	}
+}, 100);
 
 // Hacks to restart the plugin on pushState change
 w.addEventListener('statechange', () => setTimeout(() => {
-  const timelines = d.getElementsByClassName('new-discussion-timeline');
-  if (timelines.length > 0) {
-    const timeline = timelines[0];
-    const startOnce = () => {
-      timeline.removeEventListener('DOMSubtreeModified', startOnce);
-      start();
-    };
-    timeline.addEventListener('DOMSubtreeModified', startOnce);
-  }
-  start();
+	const timelines = d.getElementsByClassName('new-discussion-timeline');
+	if (timelines.length > 0) {
+		const timeline = timelines[0];
+		const startOnce = () => {
+			timeline.removeEventListener('DOMSubtreeModified', startOnce);
+			start();
+		};
+		timeline.addEventListener('DOMSubtreeModified', startOnce);
+	}
+	start();
 }, 500));
 
 // First start
