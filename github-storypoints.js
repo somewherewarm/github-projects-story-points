@@ -73,7 +73,7 @@ var titleWithTotalPoints = (cards, points, pointsCone, unestimated, notes) => {
 var addStoryPointsForColumn = (column) => {
 	const columnCards = Array
 		.from(column.getElementsByClassName('issue-card'))
-		.filter(card => !card.classList.contains('sortable-ghost'))
+		.filter(card => !card.classList.contains('sortable-ghost') && !card.classList.contains('d-none'))
 		.map(card => {
 
 			const is_note = Array
