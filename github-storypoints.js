@@ -1,7 +1,7 @@
 (function (d, w) {
 'use strict';
 
-var matchPointsRegEx = /\(([\d]+)±?(([\d\.]*))pts?\)/im;
+var matchPointsRegEx = /\(([0-9]*[.]?[0-9]+)pts?\)/im;
 
 var debounce = function (func, wait, immediate) {
 	var timeout;
@@ -35,7 +35,7 @@ var resetStoryPointsForColumn = (column) => {
 	}
 };
 
-var titleWithTotalPoints = (cards, points, pointsCone, unestimated, notes) => {
+var titleWithTotalPoints = (cards, points, unestimated, notes) => {
 		let unestimated_element = "";
 		let points_element      = "";
 		let notes_element       = "";
@@ -60,7 +60,7 @@ var titleWithTotalPoints = (cards, points, pointsCone, unestimated, notes) => {
 		}
 
 		if (issues && points >= 0) {
-			points_element = pointsCone > 0 ? `${points}±${pointsCone} pt${pluralize(points)}` : `${points} pt${pluralize(points)}`;
+			points_element = `${points} pt${pluralize(points)}`;
 		}
 
 		if (points_element && (show_issues || show_notes)) {
@@ -90,8 +90,7 @@ var addStoryPointsForColumn = (column) => {
 				matchPointsRegEx.exec(issueTitleInner) ||
 				[null, '0', '0'])
 
-			const storyPoints     = parseFloat(matchPoints[1]) || 0;
-			const storyPointsCone = parseFloat(matchPoints[2]) || 0;
+			const storyPoints = parseFloat(matchPoints[1]) || 0;
 
 			const is_estimated = (matchPoints[0] !== null);
 
@@ -99,27 +98,24 @@ var addStoryPointsForColumn = (column) => {
 				element: card,
 				is_estimated,
 				is_note,
-				storyPoints,
-				storyPointsCone
+				storyPoints
 			};
 		});
 
-	let columnStoryPoints     = 0;
-	let columnStoryPointsCone = 0;
-	let columnUnestimated     = 0;
-	let columnNotes           = 0;
+	let columnStoryPoints = 0;
+	let columnUnestimated = 0;
+	let columnNotes       = 0;
 
 	for (let card of columnCards) {
-		columnStoryPoints     += card.storyPoints;
-		columnStoryPointsCone += card.storyPointsCone;
-		columnNotes           += card.is_note ? 1 : 0;
-		columnUnestimated     += (card.is_estimated || card.is_note ? 0 : 1);
+		columnStoryPoints += card.storyPoints;
+		columnNotes       += card.is_note ? 1 : 0;
+		columnUnestimated += (card.is_estimated || card.is_note ? 0 : 1);
 	}
 
 	// Apply DOM changes:
 	const columnCountElement = column.getElementsByClassName('js-column-card-count')[0];
 
-	columnCountElement.innerHTML = titleWithTotalPoints(columnCards.length, columnStoryPoints, columnStoryPointsCone, columnUnestimated, columnNotes);
+	columnCountElement.innerHTML = titleWithTotalPoints(columnCards.length, columnStoryPoints, columnUnestimated, columnNotes);
 };
 
 var resets = [];
