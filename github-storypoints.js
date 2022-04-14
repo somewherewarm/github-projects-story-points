@@ -90,7 +90,7 @@ var addStoryPointsForColumn = (column) => {
 				matchPointsRegEx.exec(issueTitleInner) ||
 				[null, '0', '0'])
 
-			const storyPoints = parseFloat(matchPoints[1]) || 0;
+			const storyPoints = Math.round( parseFloat( matchPoints[1]) * 100 ) / 100 || 0;
 
 			const is_estimated = (matchPoints[0] !== null);
 
@@ -115,7 +115,7 @@ var addStoryPointsForColumn = (column) => {
 	// Apply DOM changes:
 	const columnCountElement = column.getElementsByClassName('js-column-card-count')[0];
 
-	columnCountElement.innerHTML = titleWithTotalPoints(columnCards.length, columnStoryPoints, columnUnestimated, columnNotes);
+	columnCountElement.innerHTML = titleWithTotalPoints(columnCards.length, Math.round( columnStoryPoints * 100 ) / 100, columnUnestimated, columnNotes);
 };
 
 var resets = [];
